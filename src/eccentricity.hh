@@ -9,6 +9,7 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <functional>
 
 #include "mgraph.hh"
 #include "traversal.hh"

@@ -7,6 +7,7 @@
 #include <vector>
 #include <queue>          // std::priority_queue
 #include <algorithm>      // std::min
+#include <functional>
 
 #include "mgraph.hh"
 

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <climits>
 #include <vector>
+#include <functional>
 
 #include "mgraph.hh"
 #include "dyn_graph.hh"
