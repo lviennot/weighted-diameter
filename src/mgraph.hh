@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <vector>
 #include <utility>
+#include <functional>
 
 #include "edge.hh"
 
