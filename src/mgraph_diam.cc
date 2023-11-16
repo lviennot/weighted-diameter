@@ -149,13 +149,14 @@ int main (int argc, char **argv) {
     bool do_diam_all = del_arg("-diam-all");
     bool do_closeness = del_arg("-closeness");
     int source_node = get_iarg("-source", 0);
+    int loop_limit = get_iarg("-loop-limit", -1);
     bool do_closeness_all = del_arg("-closeness-all");
     bool all_bfs = del_arg("-all-bfs");
     bool very_low_cert = del_arg("-very-low-cert"); //very low mem usag for cert
     std::atomic<bool> low_cert(del_arg("-low-cert") || very_low_cert);
     std::string optim_certif = get_arg("-optim-certif");
     std::string algo = get_arg("-algo");
-    int n_thread = get_iarg("-n-thread", std::thread::hardware_concurrency());
+    int n_thread = get_iarg("-n-thread", 1); //std::thread::hardware_concurrency());
     int beta_hyp = get_iarg("-beta-hyp", INT_MAX);
     bool do_quad_antipode = del_arg("-quad-antipode");
     bool do_antipodes = del_arg("-antipodes");
@@ -558,13 +559,63 @@ int main (int argc, char **argv) {
         if (do_closeness) {
             std::cout << "# v |Reach(v)| dist_sum harm_sum\n";
             print_sums(source_node);
+            verb::lap("closeness");
         }
 
-        if (do_closeness_all) {
+        if (do_closeness_all && n_thread == 1) {
+            
             std::cout << "# v |Reach(v)| dist_sum harm_sum\n";
-            for (int s = 0; s < n; ++s) {
+            for (int s = 0; s < n && (loop_limit < 0 || s < loop_limit); ++s) {
                 print_sums(s);
             }
+            verb::lap("closeness-all");
+            
+        } else {
+            
+            std::cout << "# v |Reach(v)| dist_sum harm_sum\n";
+            
+            std::mutex mutex;
+
+            auto go_clo = [n,loop_limit,n_thread,
+                           &g,&lab,weighted,&mutex](int i_thd) {
+                traversal<graph> trav(n);
+                for (int s = 0;
+                     s < n && (loop_limit < 0 || s < loop_limit); ++s) {
+                    if ((1237L * s) % n_thread == i_thd) {
+                        // print_sums(s); :
+                        int source_node = s;
+                        trav.clear();
+                        int nvis = 0;
+                        if (weighted) {
+                            nvis = trav.dijkstra(g, source_node);
+                        } else {
+                            nvis = trav.bfs(g, source_node);
+                        }
+                        int64_t sum = 0;
+                        double harm = 0.;
+                        for (int i = 0; i < nvis; ++i) {
+                            int v = trav.visit(i);
+                            int64_t d = trav.dist(v);
+                            sum += d;
+                            if (d > 0) harm += 1./double(d);
+                        }
+                        mutex.lock();
+                        std::cout << lab[source_node] <<" "<< nvis
+                                  <<" "<< sum <<" "<< harm <<"\n";
+                        mutex.unlock();
+                    }
+                }
+            };
+
+            std::vector<std::thread> threads(n_thread);
+            for (int i = 0; i < n_thread; ++i) {
+                threads[i] = std::thread(go_clo, i);
+            }
+            std::cerr << n_thread <<" closeness threads\n";
+            for (int i = 0; i < n_thread; ++i) threads[i].join();
+            
+            verb::lap("closeness-all");
+            
         }
     }
     
