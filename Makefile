@@ -21,7 +21,7 @@ munweight: src/mgraph_unweight.cc $(MHDRS)
 
 
 
-# ------ graph drawing -----
+# ------ graph drawing ----- times with nthd=1,2,4,8,16: 9.2 5.2 4.5 4.8 5.2
 
 GRAPHVIZ:=neato -Ksfdp 
 GRAPHVIZ2:=neato -Ksfdp -Goverlap=scale -Gsplines=curved -Nlabel="" -Earrowhead=none -Nshape=circle -Nstyle=filled -Nwidth=.1 -Nfixed-size=true -Nfontsize=15 -Ncolor="\#00000060" -Ecolor="\#00000020"

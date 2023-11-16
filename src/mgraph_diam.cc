@@ -157,6 +157,10 @@ int main (int argc, char **argv) {
     std::string optim_certif = get_arg("-optim-certif");
     std::string algo = get_arg("-algo");
     int n_thread = get_iarg("-n-thread", 1); //std::thread::hardware_concurrency());
+    if (n_thread > 1 && n_thread != std::thread::hardware_concurrency()) {
+        std::cerr <<"System recommendation for -n-thread: "
+                  << std::thread::hardware_concurrency() <<"\n";
+    }
     int beta_hyp = get_iarg("-beta-hyp", INT_MAX);
     bool do_quad_antipode = del_arg("-quad-antipode");
     bool do_antipodes = del_arg("-antipodes");
@@ -562,7 +566,7 @@ int main (int argc, char **argv) {
             verb::lap("closeness");
         }
 
-        if (do_closeness_all && n_thread == 1) {
+        if (do_closeness_all && n_thread <= 1) {
             
             std::cout << "# v |Reach(v)| dist_sum harm_sum\n";
             for (int s = 0; s < n && (loop_limit < 0 || s < loop_limit); ++s) {
@@ -570,7 +574,7 @@ int main (int argc, char **argv) {
             }
             verb::lap("closeness-all");
             
-        } else {
+        } else if (do_closeness_all) {
             
             std::cout << "# v |Reach(v)| dist_sum harm_sum\n";
             
@@ -976,7 +980,11 @@ int main (int argc, char **argv) {
 
     if (do_all_ecc) {
         ecc.clear();
-        ecc.all_threaded(n_thread);
+        if (n_thread <= 1) {
+            ecc.all();
+        } else {
+            ecc.all_threaded(n_thread);
+        }
         std::cerr <<"last_lb_improve " << ecc.last_lb_improve <<std::endl;
 
         set_col("last_lb_improve", ecc.last_lb_improve);
@@ -1030,6 +1038,7 @@ int main (int argc, char **argv) {
         double sum = 0.;
         for (int u = 0; u < n; ++u) {
             e[u] = ecc.ecc_lb(u);
+            std::cout << lab[u] <<" "<< e[u] <<"\n";
             sum += (double)e[u];
         }
         set_distr_col(e, "ecc");

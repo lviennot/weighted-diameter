@@ -9,7 +9,6 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
-#include <functional>
 
 #include "mgraph.hh"
 #include "traversal.hh"
@@ -1751,9 +1750,9 @@ public:
         //std::vector<std::atomic_flag> sweeping(n);
         //for (V u = 0; u < n; ++u) sweeping[u].clear();
         std::vector<std::atomic_bool> sweeping(n);
-        for (V u = 0; u < n; ++u) sweeping[u].store(false, acquire);
+        for (V u = 0; u < n; ++u) sweeping[u].store(false, release);
         std::vector<std::atomic_bool> sweeping_P(n);
-        for (V u = 0; u < n; ++u) sweeping_P[u].store(false, acquire);
+        for (V u = 0; u < n; ++u) sweeping_P[u].store(false, release);
         std::mutex this_mutex;
         // copies of ecc_lb and ecc_ub, thread i writes only its own copy
         std::vector<std::vector<std::atomic<WL>>> lb(n_thd), ub(n_thd);
@@ -2000,8 +1999,8 @@ public:
         for (int i = 0; i < n_thd; ++i) threads[i].join();
 
         for (V u = 0; u < n; ++u) {
-            ecc_lb_[u] = lb[0][u].load(acq_rel);
-            ecc_ub_[u] = ub[0][u].load(acq_rel);
+            ecc_lb_[u] = lb[0][u].load(acquire);
+            ecc_ub_[u] = ub[0][u].load(acquire);
             if (ecc_lb_[u] != ecc_ub_[u])
                 std::cerr <<"u="<< u <<" lb="<< ecc_lb_[u]
                              <<" ub="<< ecc_ub_[u] <<"\n";
