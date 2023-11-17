@@ -26,6 +26,116 @@
 
 typedef mgraph<int> graph;
 
+
+void usage_exit (char **argv) {
+    auto paragraph = [](std::string s, int width=80) -> std::string {
+        std::string acc;
+        while (s.size() > 0) {
+            int pos = s.size();
+            if (pos > width) pos = s.rfind(' ', width);
+            std::string line = s.substr(0, pos);
+            acc += line + "\n";
+            s = s.substr(pos);
+        }
+        return acc;
+    };
+    
+    std::cerr <<"\nUsage: "
+              << argv[0] <<" [options] [filename]\n\n"
+
+              << paragraph ("Read or generate a graph and compute some of its "
+                            "parameters such as radius, diameter, or all "
+                            "eccentricities. The graph is considered directed "
+                            "(use -symmetrize to obtain a symmetric graph "
+                            "equivalent to an undirected graph) and can be"
+                            " weighted (use option -weighted). "
+                            "The graph is either "
+                            "generated from options (see, e.g. -grid), or "
+                            "read from a file (use filename - for reading from "
+                            "the standard input). The input format consists of "
+                            "a sequence of [u v] pairs (for arc u -> v) for "
+                            "unweighted graphs or [u v wgt] triples for "
+                            "weighted graphs (space and newline characters "
+                            "are ignored). Nodes can be identified by any "
+                            "string (excluding whitespaces).\n")
+
+              << paragraph ("Distances: this program computes various "
+                            "paramters related to distances in the input graph."
+                            " The distance d(u,v) from u to v is defined as the"
+                            " length of a shortest path from u to v "
+                            "(non-negative weights are assumed). The length "
+                            "of a path is its number of arcs if the graph is "
+                            "unweighted, and the sum of weigts of its arcs "
+                            "if it is weighted. It is "
+                            "considered infinite if v is not reachable from u."
+                            " Note that d(u,v) can be different from d(v,u) in "
+                            "a directed graph.")
+
+              << paragraph ("Efficiency: nodes are numbered as ints as they "
+                            "are encountered, this limits to graphs of 2^31 "
+                            "nodes at most. Some computations use "
+                            "multithreading (see -n-thread).\n")
+
+              << paragraph ("Possible options:\n")
+
+              << paragraph ("  -all-ecc        Compute all eccentricities. "
+                            "The eccentricity e(u) of a node u is max_v d(u,v) "
+                            "where d(u,v).\n")
+        
+              << paragraph ("  -closeness-all  Compute the closeness "
+                            "centrality of all nodes. Outputs for each node u"
+                            " a quadruple [u r s h] where u is the label of u "
+                            "(as given in input), r is the size |R(u)| where "
+                            "R(u) denotes the set of nodes reachable from u,"
+                            " s is the sum of distances s = sum_{v in R(u)} "
+                            "d(u,v), and h is the harmonic sum h = "
+                            "sum_{v in R(u)} 1 / d(u,v). Closeness centrality"
+                            " is classically defined as 1/s, a normalized "
+                            "value can be obtained with (r-1)^2 / (s(n-1)).\n")
+        
+              << paragraph ("  -diameter       Compute the diameter, that is "
+                            "the maximum eccentricity of a node (see "
+                            "-all-ecc). Consider -largest-scc for non "
+                            "(strongly) connected graphs.\n")
+        
+              << paragraph ("  -grid l         Generate a l x l grid.\n")
+        
+              << paragraph ("  -n-thread       Specify the number of threads "
+                            "to use.\n")
+        
+              << paragraph ("  -power-law b    Generate a random graph "
+                            "according to the configuration model such that "
+                            "the degree sequence follows a power law with "
+                            "parameter b.\n")
+        
+              << paragraph ("  -radius         Compute the radius, that is "
+                            "the minimum eccentricity of a node (see "
+                            "-all-ecc). Consider -largest-scc for non "
+                            "(strongly) connected graphs.\n")
+        
+              << paragraph ("  -reverse        Reverse all arcs.\n")
+        
+              << paragraph ("  -largest-scc    Restrict the graph to its "
+                            "largest strongly connected component.\n")
+
+              << paragraph ("  -simple         Ensure that the graph is simple "
+                            "by removing duplicate arcs: among "
+                            "all u -> v arcs, keep one with minimum weight.\n")
+
+              << paragraph ("  -symmetrize     Add arc v -> u for each arc "
+                            "u -> v in the original graph.\n")
+
+              << paragraph ("  -weighted       Read a weighted graph: the "
+                            "sequence read is interpreted as a list of triples "
+                            "[u v wgt] instead of pairs [u v].\n")
+
+              <<"";
+
+    exit(1);
+}
+
+
+
 void bye (std::string msg) {
     std::cerr << msg << "\n";
     std::cerr.flush();
@@ -76,6 +186,8 @@ class vector_int : public std::vector<int> {
     vector_int() : std::vector<int>(2) { }
 };
 
+
+
 int main (int argc, char **argv) {
 
     int iter = 1000;
@@ -125,38 +237,38 @@ int main (int argc, char **argv) {
         for (int i = 1; i < argc; ++i) {
             std::string b(argv[i]);
             if(b.size() > 1 && b[0] == '-')
-                bye(b + ": unrecognize option ?????");
+                bye(b + ": unrecognize option ?????, try -h");
         }
     };
     
-    bool do_vector = del_arg("-test-vector");
+    bool do_vector = del_arg("-test-vector"); //notcom
     bool symmetrize = del_arg("-symmetrize");
-    bool del_zero_edges = del_arg("-del-zero-edges");
+    bool del_zero_edges = del_arg("-del-zero-edges"); //tocom
     bool do_reverse = del_arg("-reverse");
-    bool do_scc = ! del_arg("-no-scc");
-    bool do_cols = ! del_arg("-no-cols");
+    bool do_scc = del_arg("-largest-scc");
+    bool do_cols = del_arg("-columns"); //tocom
     bool directed = ! symmetrize;
     bool simple = del_arg("-simple");
     bool weighted = del_arg("-weighted");
     //bool biggest_comp = del_arg("-bcc");
     bool do_all_ecc = del_arg("-all-ecc");
-    int many_bfs = get_iarg("-many-bfs", 0);
-    int n_big_graph = get_iarg("-n-big-graph", 0);
-    bool do_skel = del_arg("-skel");
+    int many_bfs = get_iarg("-many-bfs", 0); //notcom
+    int n_big_graph = get_iarg("-n-big-graph", 0); //notcom
+    bool do_skel = del_arg("-skel"); //tocom
     bool do_rad = del_arg("-rad") || del_arg("-radius");
-    int sample_size = get_iarg("-sample-size", 20);
+    int sample_size = get_iarg("-sample-size", 20); //notcom
     bool do_diam = del_arg("-diam") || del_arg("-diameter");
-    bool do_diam_all = del_arg("-diam-all");
-    bool do_closeness = del_arg("-closeness");
+    bool do_diam_all = del_arg("-diam-all"); //notcom
+    bool do_closeness = del_arg("-closeness"); //notcom
     int source_node = get_iarg("-source", 0);
-    int loop_limit = get_iarg("-loop-limit", -1);
+    int loop_limit = get_iarg("-loop-limit", -1); //notcom
     bool do_closeness_all = del_arg("-closeness-all");
     bool all_bfs = del_arg("-all-bfs");
     bool very_low_cert = del_arg("-very-low-cert"); //very low mem usag for cert
     std::atomic<bool> low_cert(del_arg("-low-cert") || very_low_cert);
     std::string optim_certif = get_arg("-optim-certif");
     std::string algo = get_arg("-algo");
-    int n_thread = get_iarg("-n-thread", 1); //std::thread::hardware_concurrency());
+    int n_thread = get_iarg("-n-thread", std::thread::hardware_concurrency());
     if (n_thread > 1 && n_thread != std::thread::hardware_concurrency()) {
         std::cerr <<"System recommendation for -n-thread: "
                   << std::thread::hardware_concurrency() <<"\n";
@@ -182,7 +294,13 @@ int main (int argc, char **argv) {
     bool generate = losange > 0 || bow_tie > 0 || udg_deg > 0
         || cycle > 0 || grid > 0 || path > 0 || power_law > 0.;
     bool print_graph = del_arg("-print-graph");
+    
+    if (del_arg("-h") || del_arg("-help") || del_arg("--help")) {
+        usage_exit(argv);
+    }
     no_more_options();
+
+    if (argc != generate ? 0 : 1) usage_exit(argv);
     
     verb::begin(verbosity);
 
