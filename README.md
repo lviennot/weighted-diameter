@@ -12,9 +12,25 @@ make
 
 ## Examples
 ```
-./mdiam -weighted -largest-scc -diam test_digraph.txt   # diameter of largest strongly connected component
-cat test_digraph.txt | cut -d' ' -f 1,2 | ./mdiam -symmetrize -simple -rad -   # radius of an unweighted version which is symmetrized (weak connectivity is assumed)
-cat test_digraph.txt | ./mdiam -weighted -closeness-all - 2> /dev/null   # compute closeness out-centrality of all nodes
+$ ./mdiam -weighted -largest-scc -diameter test_digraph.txt   # diameter of largest strongly connected component
+D=17 nbfs=15 ncertif=3 time=0.322819
+
+$ cat test_digraph.txt | cut -d' ' -f 1,2 | ./mdiam -symmetrize -simple -radius -   # radius of an unweighted version which is symmetrized (weak connectivity is assumed)
+rad : R=3 D>=4 nbfs=7 ncertif=4 time=0.154972
+
+$ cat test_digraph.txt | ./mdiam -weighted -closeness-all - 2> /dev/null   # compute closeness out-centrality of all nodes
+# v |Reach(v)| dist_sum harm_sum
+0 10 82 2.43908
+4 10 91 1.30466
+8 3 5 0.833333
+3 10 94 1.94695
+7 3 12 0.342857
+2 10 76 2.28307
+6 10 48 3.7112
+10 1 0 0
+1 10 79 2.38364
+5 10 28 4.45833
+9 3 7 1.16667
 ```
 
 ## Usage
