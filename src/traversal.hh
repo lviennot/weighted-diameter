@@ -7,7 +7,6 @@
 #include <vector>
 #include <queue>          // std::priority_queue
 #include <algorithm>      // std::min
-#include <functional>
 
 #include "mgraph.hh"
 
@@ -356,7 +355,7 @@ public:
                 dfs(g, s, SCC);
             }
         }
-        std::cerr <<"nvis="<< nvis_ <<"\n";
+        //std::cerr <<"nvis="<< nvis_ <<"\n";
         int nb = 0;
         for (int i = 0; i < nvis_; ++i) {
             V u = visit_[i];
@@ -366,6 +365,10 @@ public:
             if (ll == i) ++nb;
         }
         return nb;
+    }
+
+    bool is_strongly_connected(const G &g) {
+        return stongly_connected_components(g) == 1;
     }
 
     // Returns the scc number of the strongly connected component of [v],

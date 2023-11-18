@@ -69,16 +69,17 @@ void usage_exit (char **argv) {
                             "if it is weighted. It is "
                             "considered infinite if v is not reachable from u."
                             " Note that d(u,v) can be different from d(v,u) in "
-                            "a directed graph.")
+                            "a directed graph.\n")
 
               << paragraph ("Efficiency: nodes are numbered as ints as they "
                             "are encountered, this limits to graphs of 2^31 "
-                            "nodes at most. Some computations use "
+                            "nodes at most (the code can easily be patched to "
+                            "use larger integers). Some computations use "
                             "multithreading (see -n-thread).\n")
 
               << paragraph ("Possible options:\n")
 
-              << paragraph ("  -all-ecc        Compute all eccentricities. "
+              << paragraph ("  -eccentricity-all  Compute all eccentricities. "
                             "The eccentricity e(u) of a node u is max_v d(u,v) "
                             "where d(u,v).\n")
         
@@ -91,17 +92,30 @@ void usage_exit (char **argv) {
                             "d(u,v), and h is the harmonic sum h = "
                             "sum_{v in R(u)} 1 / d(u,v). Closeness centrality"
                             " is classically defined as 1/s, a normalized "
-                            "value can be obtained with (r-1)^2 / (s(n-1)).\n")
+                            "value can be obtained with (r-1)^2 / (s(n-1)). "
+                            "Use -columns-verb 0 to output only those lines.\n")
         
+              << paragraph ("  -params-verb v   Computed parameters are "
+                            "output to stdout on one line, separated by "
+                            "spaces. The first four fields are [n m dir wgt]:"
+                            " the number n of nodes, the number m of edges, "
+                            "dir=1 for a directed graph (0 if -symmetrize is "
+                            "used) and wgt=1 for a weighted graph (use "
+                            "-weighted). Use -diameter, -radius for diameter, "
+                            "and/or radius. Nothing is output with v=0, the "
+                            "default is 1, while more information about the "
+                            "computation is output with 2.\n")
+
               << paragraph ("  -diameter       Compute the diameter, that is "
                             "the maximum eccentricity of a node (see "
-                            "-all-ecc). Consider -largest-scc for non "
+                            "-eccentricity-all). Consider -largest-scc for non "
                             "(strongly) connected graphs.\n")
         
               << paragraph ("  -grid l         Generate a l x l grid.\n")
         
               << paragraph ("  -n-thread       Specify the number of threads "
-                            "to use.\n")
+                            "to use. Options using multithreading are "
+                            "-closeness-all, \n")
         
               << paragraph ("  -power-law b    Generate a random graph "
                             "according to the configuration model such that "
@@ -110,7 +124,7 @@ void usage_exit (char **argv) {
         
               << paragraph ("  -radius         Compute the radius, that is "
                             "the minimum eccentricity of a node (see "
-                            "-all-ecc). Consider -largest-scc for non "
+                            "-eccentricity-all). Consider -largest-scc for non "
                             "(strongly) connected graphs.\n")
         
               << paragraph ("  -reverse        Reverse all arcs.\n")
@@ -120,10 +134,16 @@ void usage_exit (char **argv) {
 
               << paragraph ("  -simple         Ensure that the graph is simple "
                             "by removing duplicate arcs: among "
-                            "all u -> v arcs, keep one with minimum weight.\n")
-
+                            
+                            "all u -> v arcs, keep one with minimum weight.\n"
+                            )
+        
               << paragraph ("  -symmetrize     Add arc v -> u for each arc "
                             "u -> v in the original graph.\n")
+
+              << paragraph ("  -verbosity v    Print on stderr various "
+                            "information depending on v=0,1,2 (defaults to "
+                            "0 for nothing).\n")
 
               << paragraph ("  -weighted       Read a weighted graph: the "
                             "sequence read is interpreted as a list of triples "
@@ -156,7 +176,7 @@ void printerr_distribution(std::vector<int64_t> &v, std::string what="") {
     }
 
     double x = 0., y = 0.;
-    std::cerr << "#_distr_" << what <<" ";
+    verb::cerr() << "#_distr_" << what <<" ";
     for (int i = 0; i < n ; ++i) {
         double y2 = ((double)(i+1)) / ((double) n);
         double x2 = ((double)(v[i] - v_min))
@@ -166,11 +186,11 @@ void printerr_distribution(std::vector<int64_t> &v, std::string what="") {
             || x2 - x >= 0.1 || y2 - y >= 0.1 
             || (v[i] != v[i-1] && (nvals <= 15
                                    || (i_back >= 0 && v[i_back] == v[i-1])) )) {
-            std::cerr << v[i] <<","<< (i+1) <<" ";
+            verb::cerr() << v[i] <<","<< (i+1) <<" ";
             x = x2; y = y2;
         }
     }
-    std::cerr << std::endl;
+    verb::cerr() << std::endl;
 }
 
 int64_t mean1000(std::vector<int64_t> &v) {
@@ -190,13 +210,9 @@ class vector_int : public std::vector<int> {
 
 int main (int argc, char **argv) {
 
-    int iter = 1000;
-    //if (argc > 1) iter = std::stoi (argv[1]) ;
-    //std::cout <<"skel pref min: "<< skel_prefix_min(1 << 30, iter) <<"\n";
-    //exit(0);
-
     // ------------------------- arguments ----------------------
     auto i_arg = [&argc,&argv](std::string a) {
+        //for (int i = 1; i < argc; ++i) std::cerr << argv[i] <<" "; std::cerr <<" for "<< a <<"\n";
         for (int i = 1; i < argc; ++i)
             if (a == argv[i])
                 return i;
@@ -215,16 +231,18 @@ int main (int argc, char **argv) {
     auto get_arg = [&argc,&argv,i_arg](std::string a, std::string dft="") {
         int i = i_arg(a);
         if (i >= 0) {
+            if (i+1 > argc) bye(a + " requires an argument, try -h");
             std::string b(argv[i+1]);
             for (int j = i+2; j < argc; ++j)
                 argv[j-2] = argv[j];
             argc -= 2;
+            //std::cerr << a <<" "<< b <<"\n";
             return b;
         }
         return dft;
     };
     auto get_iarg = [&get_arg](std::string a, int dft) {
-        std::string s = get_arg(a);
+        std::string s = get_arg(a, "");
         if (s != "") return std::stoi(s);
         else return dft;
     };
@@ -246,12 +264,13 @@ int main (int argc, char **argv) {
     bool del_zero_edges = del_arg("-del-zero-edges"); //tocom
     bool do_reverse = del_arg("-reverse");
     bool do_scc = del_arg("-largest-scc");
-    bool do_cols = del_arg("-columns"); //tocom
+    int cols_verb = get_iarg("-params-verb", 1);
+    if (del_arg("-no-cols") || del_arg("-no-params")) cols_verb = 0;
     bool directed = ! symmetrize;
     bool simple = del_arg("-simple");
     bool weighted = del_arg("-weighted");
     //bool biggest_comp = del_arg("-bcc");
-    bool do_all_ecc = del_arg("-all-ecc");
+    bool do_all_ecc = del_arg("-eccentricity-all") || del_arg("-all-ecc");
     int many_bfs = get_iarg("-many-bfs", 0); //notcom
     int n_big_graph = get_iarg("-n-big-graph", 0); //notcom
     bool do_skel = del_arg("-skel"); //tocom
@@ -269,16 +288,12 @@ int main (int argc, char **argv) {
     std::string optim_certif = get_arg("-optim-certif");
     std::string algo = get_arg("-algo");
     int n_thread = get_iarg("-n-thread", std::thread::hardware_concurrency());
-    if (n_thread > 1 && n_thread != std::thread::hardware_concurrency()) {
-        std::cerr <<"System recommendation for -n-thread: "
-                  << std::thread::hardware_concurrency() <<"\n";
-    }
     int beta_hyp = get_iarg("-beta-hyp", INT_MAX);
     bool do_quad_antipode = del_arg("-quad-antipode");
     bool do_antipodes = del_arg("-antipodes");
     bool do_coballs = del_arg("-coballs");
     //double alpha = 0.4;
-    int verbosity = get_iarg("-verb", 2);
+    int verbosity = get_iarg("-verb", get_iarg("-verbosity", 0));
     int mem_limit_mb = get_iarg("-mem-limit-mb", 48000);
     int rand_edge_del = get_iarg("-edge-del", 0); // percentage
     int rand_edge_weight = get_iarg("-rand-weight", 0); // percentage
@@ -301,9 +316,15 @@ int main (int argc, char **argv) {
     no_more_options();
 
     if (argc != generate ? 0 : 1) usage_exit(argv);
+
     
     verb::begin(verbosity);
 
+    if (n_thread > 1 && n_thread != std::thread::hardware_concurrency()) {
+        verb::cerr() <<"System recommendation for -n-thread: "
+                     << std::thread::hardware_concurrency() <<"\n";
+    }
+    
     if (do_vector) {
         verb::lap("test empty");
         std::vector<vector_int> t(10*1000*1000);
@@ -318,8 +339,11 @@ int main (int argc, char **argv) {
     std::vector<std::string> col_name;
     std::unordered_map<std::string, int> col_i;
     std::vector<int64_t> col_val;
-    auto set_col = [&col_name, &col_i, &col_val](std::string name,
-                                                 int64_t val) {
+    auto set_col = [&col_name, &col_i, &col_val, cols_verb](std::string name,
+                                                 int64_t val, int verb=2) {
+        verb::cerr(2) << name <<" "<< val
+                      <<" verb="<< verb <<" params-verb="<< cols_verb <<"\n";
+        if (verb > cols_verb) return;
         int i = col_i[name];
         if (i == 0) {
             col_name.push_back(name);
@@ -329,17 +353,20 @@ int main (int argc, char **argv) {
         while (col_val.size() < i) col_val.push_back(0);
         col_val[i-1] = val;
     };
-    auto set_distr_col = [&set_col](std::vector<int64_t> &v, std::string name) {
+    auto set_distr_col = [&set_col, cols_verb](std::vector<int64_t> &v,
+                                               std::string name,
+                                    int verb=2) {
         printerr_distribution(v, name);
+        if (verb > cols_verb) return;
         int n = v.size();
-        set_col(name + "_min", n > 0 ? v[0] : -1);
-        set_col(name + "_n/4", n > 0 ? v[n/4] : -1);
-        set_col(name + "_n/2", n > 0 ? v[n/2] : -1);
-        set_col(name + "_3n/4", n > 0 ? v[3*n/4] : -1);
-        set_col(name + "_90%", n > 0 ? v[9*n/10] : -1);
-        set_col(name + "_99%", n > 0 ? v[99*n/100] : -1);
-        set_col(name + "_max", n > 0 ? v[n-1] : -1);
-        set_col(name + "_avg*1000", mean1000(v));
+        set_col(name + "_min", n > 0 ? v[0] : -1, verb);
+        set_col(name + "_n/4", n > 0 ? v[n/4] : -1, verb);
+        set_col(name + "_n/2", n > 0 ? v[n/2] : -1, verb);
+        set_col(name + "_3n/4", n > 0 ? v[3*n/4] : -1, verb);
+        set_col(name + "_90%", n > 0 ? v[9*n/10] : -1, verb);
+        set_col(name + "_99%", n > 0 ? v[99*n/100] : -1, verb);
+        set_col(name + "_max", n > 0 ? v[n-1] : -1, verb);
+        set_col(name + "_avg*1000", mean1000(v), verb);
     };
     auto print_cols = [&col_name, &col_val](std::string more="") {
         std::cout << "#" ;
@@ -351,7 +378,10 @@ int main (int argc, char **argv) {
         for (int64_t v : col_val) std::cout << v <<" ";
 
         std::cout << more << std::endl << "#_";
-        for (std::string c : col_name) std::cout << c <<" ";
+        int i = 0;
+        for (std::string c : col_name) {
+            std::cout << ++i <<"_"<< c <<" ";
+        }
         std::cout << std::endl;
     };
 
@@ -378,10 +408,10 @@ int main (int argc, char **argv) {
     FILE *in = nullptr;
     std::string dash = "-";
     if ((argc == 1 || dash == argv[1]) && ! generate) {
-        std::cerr << "open stdin" << std::endl;
+        verb::cerr() << "open stdin" << std::endl;
         in = stdin;
     } else if (argc >= 1) {
-        std::cerr << "open " << argv[1] << std::endl;
+        verb::cerr() << "open " << argv[1] << std::endl;
         in = fopen(argv[1], "r");
     }
     
@@ -412,7 +442,7 @@ int main (int argc, char **argv) {
         }
         fclose(in);
     } else if (generate) {
-        std::cerr << "--- losange: " << losange <<" bow_tie: " << bow_tie
+        verb::cerr() << "--- losange: " << losange <<" bow_tie: " << bow_tie
                   <<" cycle: "<< cycle
                   <<" grid: "<< grid <<" path: "<< path
                   <<" udg_deg: "<< udg_deg
@@ -460,7 +490,7 @@ int main (int argc, char **argv) {
         directed = false;
     } else { bye ("no graph ?"); }
     size_t m = edg.size();
-    std::cerr << "n=" << n << " m=" << m
+    verb::cerr() << "n=" << n << " m=" << m
               << " weighted=" << weighted << " symmetrize=" << symmetrize
               <<  std::endl;
     verb::lap("load");
@@ -527,25 +557,25 @@ int main (int argc, char **argv) {
     
     graph g(edg);
     n = g.n(); m = g.m();
-    std::cerr << "n=" << n << " m=" << m <<  std::endl;
+    verb::cerr() << "n=" << n << " m=" << m <<  std::endl;
     verb::lap("graph");
 
     // ------------------------- simple -----------------------
     if (simple) {
         g = g.simple();
         n = g.n(); m = g.m();
-        std::cerr << "n=" << n << " m=" << m <<  std::endl;
+        verb::cerr() << "n=" << n << " m=" << m <<  std::endl;
         verb::lap("simple");
     }
 
     // ------------------------- strong conn comps -----------------------
-    int g_scc_nb = 0;
+    int g_scc_nb = 0, u_biggest = 0;
     {
         traversal<graph> trav(n);
         g_scc_nb = trav.strongly_connected_components(g);
         int biggest = trav.scc_largest();
-        int u_biggest = trav.scc_node(biggest);
-        std::cerr << g_scc_nb << " strongly connected component(s), biggest : "
+        u_biggest = trav.scc_node(biggest);
+        verb::cerr() << g_scc_nb << " strongly connected component(s), biggest : "
                   << trav.scc_size(biggest) <<" (e.g. lab["
                   << u_biggest <<"]="<< lab[u_biggest] <<")\n";
         verb::lap("strong conn comps");
@@ -557,8 +587,9 @@ int main (int argc, char **argv) {
             tg.bfs(g, u_biggest); th.bfs(h, u_biggest);
             int n_biggest = 0;
             for (int u : g) if (tg.visited(u) && th.visited(u)) ++n_biggest;
-            std::cerr << " check : " << n_biggest << " nodes in biggest\n";
+            verb::cerr() << " check : " << n_biggest << " nodes in biggest\n";
             assert(trav.scc_size(biggest) == n_biggest);
+            set_col("scc_of", u_biggest);
         
             // Restrict graph to biggest component :
             if (g_scc_nb > 1) {
@@ -589,18 +620,12 @@ int main (int argc, char **argv) {
                 n = g.n(); m = g.m();
                 trav.clear();
                 g_scc_nb = trav.strongly_connected_components(g);
-                std::cerr << "Graph scc : n=" << n << " m=" << m <<"\n";
+                verb::cerr() << "Graph scc : n=" << n << " m=" << m <<"\n";
                 verb::lap("restrict to scc");
             }
             
         }
     }
-
-    set_col("n", n);
-    set_col("m", m);
-    set_col("dir", directed);
-    set_col("wgt", weighted);
-    set_col("scc", g_scc_nb);
 
     n_thread = std::min(n_thread, n);
 
@@ -627,15 +652,15 @@ int main (int argc, char **argv) {
                 }
             }
         }
-        std::cerr <<"reverse graph : n=" << g_rev.n()
+        verb::cerr() <<"reverse graph : n=" << g_rev.n()
                   <<" m="<< g_rev.m() <<"\n";
         verb::lap("reverse");
     }
     
     if(do_reverse) {
         std::swap(g, g_rev);
-        std::cerr << "reverse graph!\n";
-        for (int u : g_rev) for (int v : g_rev[u]) std::cerr<< u<<" "<< v<<"\n";
+        verb::cerr() << "reverse graph!\n";
+        //for (int u : g_rev) for (int v : g_rev[u]) std::cerr<< u<<" "<< v<<"\n";
     }
 
 
@@ -733,7 +758,7 @@ int main (int argc, char **argv) {
             for (int i = 0; i < n_thread; ++i) {
                 threads[i] = std::thread(go_clo, i);
             }
-            std::cerr << n_thread <<" closeness threads\n";
+            verb::cerr() << n_thread <<" closeness threads\n";
             for (int i = 0; i < n_thread; ++i) threads[i].join();
             
             verb::lap("closeness-all");
@@ -835,7 +860,7 @@ int main (int argc, char **argv) {
             trav.clear();
             trav.dijkstra_i(g, e_s, filter);
             
-            if(e % 1000 == 0) std::cerr <<"---  nvis : "<< trav.nvis() <<"\n";
+            if(e % 1000 == 0) verb::cerr() <<"---  nvis : "<< trav.nvis() <<"\n";
             nv += trav.nvis();
         }
         std::cout <<"avg nvis : "<< nv / n <<" / "<< n <<"\n";
@@ -843,10 +868,13 @@ int main (int argc, char **argv) {
         verb::lap("skel");
     }
 
+
     // ----------------------- Radius heuristic -----------------
 
     if (do_rad) {
 
+        if(g_scc_nb != 1) bye("The graph is not strongly connected.");
+        
         ecc.clear();
         verb::lap("rad_with_sumsw");
         int64_t r = ecc.radius(graph::not_vertex, true /*do not optimize cert*/,
@@ -854,7 +882,7 @@ int main (int argc, char **argv) {
         double t_r = verb::lap_time() * 1000;
         set_col("rad_smsw_t", (int64_t)t_r);
         
-        std::cerr << "rad_smsw : R=" << r << " D>=" << ecc.diam_lb
+        verb::cerr() << "rad_smsw : R=" << r << " D>=" << ecc.diam_lb
                   <<" nbfs="<< ecc.rad_nsweep
                   <<" ncertif="<< ecc.rad_certif.size()
                   <<" time="<< t_r
@@ -873,13 +901,13 @@ int main (int argc, char **argv) {
         t_r = verb::lap_time() * 1000;
         set_col("rad_t", (int64_t)t_r);
         
-        std::cerr << "rad : R=" << r << " D>=" << ecc.diam_lb
+        verb::cerr() << "rad : R=" << r << " D>=" << ecc.diam_lb
                   <<" nbfs="<< ecc.rad_nsweep
                   <<" ncertif="<< ecc.rad_certif.size()
                   <<" time="<< t_r
                   << std::endl;
     
-        set_col("rad", r);
+        set_col("rad", r, 0);
         set_col("rad_diam_lb", ecc.diam_lb);
         set_col("rad_nbfs", ecc.rad_nsweep);
         set_col("rad_cert", ecc.P.size());
@@ -903,20 +931,20 @@ int main (int argc, char **argv) {
         
         int disj = ecc.gdy_disjoint(coballs, n).size();
         disj = std::max(disj, 2);
-        std::cerr << "rad_disj: "<< disj <<"\n";
+        verb::cerr() << "rad_disj: "<< disj <<"\n";
         set_col("rad_disj", disj);
 
         ecc.clear();
         verb::lap("rad-cert-app");
         assert(r == ecc.radius_certif_approx(r, sample_size));
         t_r = verb::lap_time() * 1000;
-        std::cerr << "rad_cert_app: P="<< ecc.P.size()
+        verb::cerr() << "rad_cert_app: P="<< ecc.P.size()
                   <<" nbfs="<< ecc.rad_nsweep
                   <<" ncertif="<< ecc.rad_certif.size()
                   <<" time="<< t_r <<"\n";
         set_col("rad_cert_app", ecc.P.size());
         set_col("rad_cert_app_opt", ecc.rad_certif.size());
-        std::cerr << "spl_sz: "<< sample_size <<"\n";
+        verb::cerr() << "spl_sz: "<< sample_size <<"\n";
         set_col("spl_sz", sample_size);
 
         verb::lap("rad");
@@ -925,6 +953,8 @@ int main (int argc, char **argv) {
     // --------------------- Various diameter heuristic ---------------
 
     if (do_diam) {
+
+        if(g_scc_nb != 1) bye("The graph is not strongly connected.");
 
         ecc.clear();
         int start = graph::not_vertex;
@@ -947,13 +977,13 @@ int main (int argc, char **argv) {
         double t_d = verb::lap_time() * 1000;
         set_col("diam_t", (int64_t)t_d);
 
-        std::cerr << "D=" << d
+        verb::cerr() << "D=" << d
                   <<" nbfs="<< ecc.diam_nsweep
                   <<" ncertif="<< ecc.diam_certif.size()
                   <<" time="<< t_d
                   << std::endl;
 
-        set_col("diam", d);
+        set_col("diam", d, 0);
         set_col("diam_nbfs", ecc.diam_nsweep);
         set_col("diam_cert", ecc.C.size());
         set_col("diam_cert_opt", ecc.diam_certif.size());
@@ -965,6 +995,9 @@ int main (int argc, char **argv) {
     // --------------------- Various diameter heuristic ---------------
 
     if (do_diam_all) {
+
+        if(g_scc_nb != 1) bye("The graph is not strongly connected.");
+        
         int best_nbfs = INT_MAX, besti = -1;
         std::string best = "";
         std::mutex col_mutex;
@@ -974,7 +1007,7 @@ int main (int argc, char **argv) {
                       start_diam rad, int loo, int64_t d) {
             col_mutex.lock();
             diam = diam + "_" + std::to_string(rad) + "_" + std::to_string(loo);
-            std::cerr << diam <<" : D=" << d
+            verb::cerr() << diam <<" : D=" << d
                <<" nbfs="<< ecc.diam_nsweep
                <<" ncertif="<< ecc.diam_certif.size()
                << std::endl;
@@ -993,7 +1026,7 @@ int main (int argc, char **argv) {
             set_col(diam +"_cert_opt", ecc.diam_certif.size());
             set_col(diam +"_cert_nbfs", ecc.nsweep - ecc.diam_nsweep);
             
-            std::cerr <<"last_lb_improve " << ecc.last_lb_improve <<std::endl;
+            verb::cerr() <<"last_lb_improve " << ecc.last_lb_improve <<std::endl;
             set_col("last_lb_improve", ecc.last_lb_improve);
             
             col_mutex.unlock();
@@ -1055,11 +1088,11 @@ int main (int argc, char **argv) {
             for (int i = 0; i < n_thd; ++i) {
                 threads[i] = std::thread(go_D, i, n_thread);
             }
-            std::cerr << n_thd <<" D threads\n";
+            verb::cerr() << n_thd <<" D threads\n";
             for (int i = 0; i < n_thd; ++i) threads[i].join();
         }
 
-        std::cerr << "Best: "<< best <<"("<< besti
+        verb::cerr() << "Best: "<< best <<"("<< besti
                   <<") with "<< best_nbfs <<" sweeps\n";
         set_col("best_diam_nbfs", besti);
         
@@ -1087,7 +1120,7 @@ int main (int argc, char **argv) {
         }
         double t_all = verb::lap_time() * 1000;
         set_col("t_all", (int64_t)t_all);
-        std::cerr << "t_all: " << t_all << " t_avg: " << (t_all / many_bfs)
+        verb::cerr() << "t_all: " << t_all << " t_avg: " << (t_all / many_bfs)
                   <<" edges/s: "<< (1.0 * many_bfs * m / t_all)
                   <<"\n";
 
@@ -1097,17 +1130,20 @@ int main (int argc, char **argv) {
     // --------------------- All ecc heuristic ---------------
 
     if (do_all_ecc) {
+
+        if(g_scc_nb != 1) bye("The graph is not strongly connected.");
+        
         ecc.clear();
         if (n_thread <= 1) {
             ecc.all();
         } else {
             ecc.all_threaded(n_thread);
         }
-        std::cerr <<"last_lb_improve " << ecc.last_lb_improve <<std::endl;
+        verb::cerr() <<"last_lb_improve " << ecc.last_lb_improve <<std::endl;
 
         set_col("last_lb_improve", ecc.last_lb_improve);
 
-        std::cerr << "all ecc: "
+        verb::cerr() << "all ecc: "
                   <<" nbfs="<< ecc.all_ecc_nsweep
                   <<" ncertif="<< ecc.P.size() <<","<< ecc.C.size()
                   << std::endl;
@@ -1122,34 +1158,34 @@ int main (int argc, char **argv) {
 
         // quite expansive with false, false :
         int d_cert_final = ecc.optim_ub_certif_one_shot(false, true).size();
-        std::cerr <<"diam_cert_final " << d_cert_final << std::endl;
+        verb::cerr() <<"diam_cert_final " << d_cert_final << std::endl;
         set_col("diam_cert_final", d_cert_final);
 
         // Centers :
-        std::cerr <<"centers:";
+        verb::cerr() <<"centers:";
         int nb_centers = 0;
         for (int u : g)
             if (ecc.ecc(u) == ecc.rad_ub)
-                { std::cerr <<" "<< lab[u]; ++nb_centers; }
-        std::cerr <<"\n";
+                { verb::cerr() <<" "<< lab[u]; ++nb_centers; }
+        verb::cerr() <<"\n";
         set_col("nb_centers", nb_centers);
         
         // R cert :
-        std::cerr <<"R_cert:";
-        for (int u : ecc.rad_certif) std::cerr <<" "<< lab[u];
-        std::cerr <<"\n";
+        verb::cerr() <<"R_cert:";
+        for (int u : ecc.rad_certif) verb::cerr() <<" "<< lab[u];
+        verb::cerr() <<"\n";
         // ub cert :
-        std::cerr <<"D_cert:";
-        for (int u : ecc.diam_certif) std::cerr <<" "<< lab[u];
-        std::cerr <<"\n";
+        verb::cerr() <<"D_cert:";
+        for (int u : ecc.diam_certif) verb::cerr() <<" "<< lab[u];
+        verb::cerr() <<"\n";
         // lb cert :
-        std::cerr <<"lb_cert:";
-        for (int u : ecc.all_lb_certif) std::cerr <<" "<< lab[u];
-        std::cerr <<"\n";
+        verb::cerr() <<"lb_cert:";
+        for (int u : ecc.all_lb_certif) verb::cerr() <<" "<< lab[u];
+        verb::cerr() <<"\n";
         // ub cert :
-        std::cerr <<"ub_cert:";
-        for (int u : ecc.all_ub_certif) std::cerr <<" "<< lab[u];
-        std::cerr <<"\n";
+        verb::cerr() <<"ub_cert:";
+        for (int u : ecc.all_ub_certif) verb::cerr() <<" "<< lab[u];
+        verb::cerr() <<"\n";
 
         // stats :
         std::vector<int64_t> e(n);
@@ -1161,13 +1197,14 @@ int main (int argc, char **argv) {
         }
         set_distr_col(e, "ecc");
         
-        std::cerr <<"avg ecc "<< (sum / (double)n) << std::endl;
+        verb::cerr() <<"avg ecc "<< (sum / (double)n) << std::endl;
         
         verb::lap("all_ecc");
     }
 
     // ------------------- All BFS -----------
     if (all_bfs) {
+
         /** How many nodes are furthest from some node u ?
          *         according to various tie break rules:
          * rnd_perm: last in a given random permutation
@@ -1183,6 +1220,8 @@ int main (int argc, char **argv) {
          *
          * nb_furthest: number of nodes u at distance ecc(v) from some v
          */
+        
+        if(g_scc_nb != 1) bye("The graph is not strongly connected.");
         
         traversal<graph> trav(n), ctrav(n), ctrav_fwd(n);
         std::mutex mutex;
@@ -1202,7 +1241,7 @@ int main (int argc, char **argv) {
         if (optim_certif != "") {
             if (optim_certif == "-") { in = stdin; }
             else {
-                std::cerr << "open '" << optim_certif << "' to read certif\n";
+                verb::cerr() << "open '" << optim_certif << "' to read certif\n";
                 in = fopen(optim_certif.c_str(), "r");
             }
             if (in != nullptr) {
@@ -1213,11 +1252,11 @@ int main (int argc, char **argv) {
                 }
                 fclose(in);
             }
-            std::cerr << "certif size: " << certif.size() << std::endl;
-            for (int u : certif) std::cerr << u <<" ";
-            std::cerr << std::endl;
+            verb::cerr() << "certif size: " << certif.size() << std::endl;
+            for (int u : certif) verb::cerr() << u <<" ";
+            verb::cerr() << std::endl;
 
-            std::cerr << "file t_all: " + (optim_certif + ".t_all") <<"\n";
+            verb::cerr() << "file t_all: " + (optim_certif + ".t_all") <<"\n";
             FILE *in = fopen((optim_certif + ".t_all").c_str(), "r");
             int64_t t_all = -1;
             if (in != nullptr) {
@@ -1225,18 +1264,18 @@ int main (int argc, char **argv) {
                 fclose(in);
             }
             set_col("t_all", t_all);
-            std::cerr << "t_all: " << t_all <<"\n";
+            verb::cerr() << "t_all: " << t_all <<"\n";
         }
 
         if (certif.size() > 0) {
-            std::cerr <<"all ecc from lb certif -----------------------\n";
+            verb::cerr() <<"all ecc from lb certif -----------------------\n";
             ecc.all_from_lb_cert(certif, n_thread, false);
         } else {
             verb::lap("beg all ecc");
             ecc.all_threaded(n_thread, graph::not_vertex, false, false);
             double t_all = verb::lap_time() * 1000;
             set_col("t_all", (int64_t)t_all);
-            std::cerr << "t_all: " << t_all <<"\n";
+            verb::cerr() << "t_all: " << t_all <<"\n";
             
             if (optim_certif != "") { // save it
                 FILE *out = fopen(optim_certif.c_str(), "w");
@@ -1250,7 +1289,7 @@ int main (int argc, char **argv) {
             }
         }
             
-        std::cerr << "rad: "<< ecc.rad_ub <<"  diam: "<< ecc.diam_lb
+        verb::cerr() << "rad: "<< ecc.rad_ub <<"  diam: "<< ecc.diam_lb
                   << "  bfs: " << ecc.all_ecc_nsweep
                   << "  all cert: "
                   << ecc.P.size() <<", " << ecc.C.size()
@@ -2476,7 +2515,8 @@ int main (int argc, char **argv) {
     // ------------------- Optimize a given certificate -----------
     if (optim_certif != "" && ! all_bfs) {
 
-        assert( ! directed); // not checked
+        if(g_scc_nb != 1) bye("The graph is not strongly connected.");
+        assert( ! directed); // not checked                
         
         std::vector<int> certif;
 
@@ -2552,8 +2592,18 @@ int main (int argc, char **argv) {
         
         verb::lap("optim_certif");
     }
+
     
-    if (do_cols) { print_cols("end"); }
+    // ------------------- Print columns ------------------------------
+    
+    set_col("n", n, 1);
+    set_col("m", m, 1);
+    set_col("dir", directed, 1);
+    set_col("wgt", weighted, 1);
+    set_col("nb_scc", g_scc_nb, 2);
+
+
+    if (cols_verb > 0) { print_cols("end"); }
     verb::end();
     exit(0);
     

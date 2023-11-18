@@ -67,7 +67,7 @@ namespace verb {
             }
         };
         update_now = std::thread(upd);
-        std::cerr << "-- start\n";
+        if (verbosity >= 1) std::cerr << "-- start\n";
     }
 
     double time_now_s() { return t_now.load(std::memory_order_acquire); }
@@ -116,17 +116,17 @@ namespace verb {
 
     std::ostream nowhere(NULL); // NULL buffer -> bad bit set
     
-    std::ostream & cerr(std::string msg, int verb = 2) {
+    std::ostream & cerr(std::string msg, int verb = 2, bool time = false) {
         if (verb > verbosity) return nowhere;
-        std::cerr << "  "
-                  << (time_now_s() - t_init) <<"s "
-                  << mem_now_kb() / 1000 << "m "
-                  << msg << (msg.size() > 0 ? " " : "") <<": ";
+        if (time) std::cerr << "  "
+                            << (time_now_s() - t_init) <<"s "
+                            << mem_now_kb() / 1000 << "m ";
+        std::cerr << msg << (msg.size() > 0 ? ": " : "");
         return std::cerr;
     }
 
-    std::ostream & cerr(int verb = 2) {
-        return cerr("", verb);
+    std::ostream & cerr(int verb = 2, bool time = false) {
+        return cerr("", verb, time);
     }
 
     void end() {

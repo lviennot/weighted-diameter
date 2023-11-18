@@ -235,7 +235,7 @@ public:
         for (int u = 0; u < n; ++u) {
             if (scc_nb[u] == scc) sample.push_back(u);
         }
-        for (int i = 0; i < sample.size()-1; ++i) {
+        for (int i = 0; i < sample.size()-1 && i+1 < n; ++i) {
             int r = i + (127L + 1237L * i) % (sample.size() - i);
             std::swap(sample[i], sample[r]);
         }
@@ -251,11 +251,11 @@ public:
             assert( ! is_in(p, P));
 
             WL e_p = sweep(p, true);
-            assert(e_p >= rad_estim);
+            assert(e_p >= rad_estim); // rad_estim seems too low!
             improves_ecc_lb();
             
             update_todo();
-            if (verb::progress())
+            if (true || verb::progress())
                 verb::cerr("eccentricity.radius()", 1)
                     << sample_count[p] <<" covered, "
                     << nsweep <<" sweeps, todo: "<< rad_todo <<" / "<< n <<"\n";
