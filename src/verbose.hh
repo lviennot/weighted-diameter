@@ -116,7 +116,7 @@ namespace verb {
 
     std::ostream nowhere(NULL); // NULL buffer -> bad bit set
     
-    std::ostream & cerr(std::string msg, int verb = 2, bool time = false) {
+    std::ostream & cerr(std::string msg, int verb = 1, bool time = false) {
         if (verb > verbosity) return nowhere;
         if (time) std::cerr << "  "
                             << (time_now_s() - t_init) <<"s "
@@ -125,7 +125,7 @@ namespace verb {
         return std::cerr;
     }
 
-    std::ostream & cerr(int verb = 2, bool time = false) {
+    std::ostream & cerr(int verb = 1, bool time = false) {
         return cerr("", verb, time);
     }
 

@@ -79,12 +79,14 @@ void usage_exit (char **argv) {
 
               << paragraph ("Possible options:\n")
 
-              << paragraph ("  -eccentricity-all  Compute all eccentricities. "
+              << paragraph ("  -eccentricity-all  Compute all eccentricities "
+                            "using multithreading. "
                             "The eccentricity e(u) of a node u is max_v d(u,v) "
                             "where d(u,v).\n")
         
               << paragraph ("  -closeness-all  Compute the closeness "
-                            "centrality of all nodes. Outputs for each node u"
+                            "centrality of all nodes using multiple threads."
+                            " Outputs for each node u"
                             " a quadruple [u r s h] where u is the label of u "
                             "(as given in input), r is the size |R(u)| where "
                             "R(u) denotes the set of nodes reachable from u,"
@@ -115,7 +117,7 @@ void usage_exit (char **argv) {
         
               << paragraph ("  -n-thread       Specify the number of threads "
                             "to use. Options using multithreading are "
-                            "-closeness-all, \n")
+                            "-eccentricity-all, -closeness-all.\n")
         
               << paragraph ("  -power-law b    Generate a random graph "
                             "according to the configuration model such that "
@@ -293,7 +295,8 @@ int main (int argc, char **argv) {
     bool do_antipodes = del_arg("-antipodes");
     bool do_coballs = del_arg("-coballs");
     //double alpha = 0.4;
-    int verbosity = get_iarg("-verb", get_iarg("-verbosity", 0));
+    int verbosity = get_iarg("-verbosity", 0);
+    verbosity = get_iarg("-verb", verbosity);
     int mem_limit_mb = get_iarg("-mem-limit-mb", 48000);
     int rand_edge_del = get_iarg("-edge-del", 0); // percentage
     int rand_edge_weight = get_iarg("-rand-weight", 0); // percentage
@@ -576,8 +579,8 @@ int main (int argc, char **argv) {
         int biggest = trav.scc_largest();
         u_biggest = trav.scc_node(biggest);
         verb::cerr() << g_scc_nb << " strongly connected component(s), biggest : "
-                  << trav.scc_size(biggest) <<" (e.g. lab["
-                  << u_biggest <<"]="<< lab[u_biggest] <<")\n";
+                  << trav.scc_size(biggest) <<" (that of node"
+                  << lab[u_biggest] <<"=lab["<< u_biggest <<"])\n";
         verb::lap("strong conn comps");
 
         if (do_scc) {
@@ -750,6 +753,9 @@ int main (int argc, char **argv) {
                         std::cout << lab[source_node] <<" "<< nvis
                                   <<" "<< sum <<" "<< harm <<"\n";
                         mutex.unlock();
+                        if (i_thd == 0 && verb::progress())
+                            verb::cerr("closeness") << s <<" "
+                                <<"todo: "<< (n - s) <<" / "<< n <<"\n";
                     }
                 }
             };
@@ -1137,6 +1143,7 @@ int main (int argc, char **argv) {
         if (n_thread <= 1) {
             ecc.all();
         } else {
+            verb::cerr() << n_thread <<" eccentricity threads\n";
             ecc.all_threaded(n_thread);
         }
         verb::cerr() <<"last_lb_improve " << ecc.last_lb_improve <<std::endl;

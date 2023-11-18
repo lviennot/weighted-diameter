@@ -94,7 +94,7 @@ public:
         last_lb_improve(0), last_ub_improve(0),
         sample(), sample_count(g.n(), 0)
     {
-        verb::cerr("eccentricity()", 1)
+        verb::cerr("eccentricity()", 2)
             << " ++++++ graph n="<< n <<" m="<< graph.m()
             << " directed: "<< directed <<" weighted: "<< weighted <<"\n";
         assert(graph.n() == graph_rev.n() && graph.m() == graph_rev.m() && n>0);
