@@ -278,6 +278,7 @@ int main (int argc, char **argv) {
     bool weighted = del_arg("-weighted");
     //bool biggest_comp = del_arg("-bcc");
     bool do_all_ecc = del_arg("-eccentricity-all") || del_arg("-all-ecc");
+    bool all_ecc_opt_cert = del_arg("-all-ecc-opt-cert");
     int many_bfs = get_iarg("-many-bfs", 0); //notcom
     int n_big_graph = get_iarg("-n-big-graph", 0); //notcom
     bool do_skel = del_arg("-skel"); //tocom
@@ -1157,10 +1158,10 @@ int main (int argc, char **argv) {
         
         ecc.clear();
         if (n_thread <= 1) {
-            ecc.all(graph::not_vertex, true);
+            ecc.all(graph::not_vertex, all_ecc_opt_cert);
         } else {
             verb::cerr() << n_thread <<" eccentricity threads\n";
-            ecc.all_threaded(n_thread, graph::not_vertex, false, false);
+            ecc.all_threaded(n_thread, graph::not_vertex, false, all_ecc_opt_cert);
         }
         verb::cerr() <<"last_lb_improve " << ecc.last_lb_improve <<std::endl;
 
