@@ -102,6 +102,22 @@ int skel_prefix_min(int len, int iter = 1000) {
     return (int) s / iter;
 }
 
+dgraph erdos_renyi_random_graph(int n, float p) {
+    std::random_device rand_dev;
+    std::mt19937 rand_gen(rand_dev());
+    std::uniform_real_distribution<> unif(0.0, 1.0);
+    // generate graph :
+    dgraph g;
+    for (int u=0; u<n; ++u) {
+         for (int v=0; v<n; ++v) {
+              if (unif(rand_gen) < p) {
+                   g.add_edge(u, v);
+              }
+         }
+    }
+    return g;
+}
+
 dgraph power_law_random_graph(int n, float beta) {
     // power law with parameter beta :
     std::vector<double> p_deg(n);

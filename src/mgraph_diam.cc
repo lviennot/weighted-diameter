@@ -118,6 +118,11 @@ void usage_exit (char **argv) {
               << paragraph ("  -n-thread       Specify the number of threads "
                             "to use. Options using multithreading are "
                             "-eccentricity-all, -closeness-all.\n")
+
+              << paragraph ("  -erdos-renyi p    Generate an Erdos-Renyi "
+                            "undirected graph where each edge uv appears with "
+                            "probability p. Set the number of nodes with "
+                            "-n-gen n.\n") 
         
               << paragraph ("  -power-law b    Generate a random graph "
                             "according to the configuration model such that "
@@ -289,7 +294,7 @@ int main (int argc, char **argv) {
     std::atomic<bool> low_cert(del_arg("-low-cert") || very_low_cert);
     std::string optim_certif = get_arg("-optim-certif");
     std::string algo = get_arg("-algo");
-    int n_thread = get_iarg("-n-thread", std::thread::hardware_concurrency());
+    int n_thread = get_iarg("-n-thread", 1); // not tested enough: std::thread::hardware_concurrency());
     int beta_hyp = get_iarg("-beta-hyp", INT_MAX);
     bool do_quad_antipode = del_arg("-quad-antipode");
     bool do_antipodes = del_arg("-antipodes");
@@ -308,9 +313,11 @@ int main (int argc, char **argv) {
     int grid = get_iarg("-grid", 0);
     int n_gen = get_iarg("-n-gen", 0);
     double udg_deg = get_darg("-udg-deg", 0);
+    double erdos_renyi = get_darg("-erdos-renyi", 0);
     double power_law = get_darg("-power-law", 0);
     bool generate = losange > 0 || bow_tie > 0 || udg_deg > 0
-        || cycle > 0 || grid > 0 || path > 0 || power_law > 0.;
+        || cycle > 0 || grid > 0 || path > 0 || power_law > 0.
+        || erdos_renyi > 0.;
     bool print_graph = del_arg("-print-graph");
     
     if (del_arg("-h") || del_arg("-help") || del_arg("--help")) {
@@ -318,7 +325,7 @@ int main (int argc, char **argv) {
     }
     no_more_options();
 
-    if (argc != generate ? 0 : 1) usage_exit(argv);
+    if (argc != (generate ? 1 : 2)) usage_exit(argv);
 
     
     verb::begin(verbosity);
@@ -468,6 +475,7 @@ int main (int argc, char **argv) {
             else if (grid > 0) g = grid_graph(grid, grid);
             else if (path > 0) g = path_graph(path);
             else if (power_law > 0.) g = power_law_random_graph(n_gen, power_law);
+            else if (erdos_renyi > 0.) g = erdos_renyi_random_graph(n_gen, erdos_renyi);
             else assert(false);
             for (int u = 0; true; ++u) {
                 if ( ! g.mem_vertex(u)) break;
@@ -640,6 +648,14 @@ int main (int argc, char **argv) {
         for (int u : g) {
             for (auto e : g[u]) {
                 assert(g_rev.has_edge(e.dst, u));
+                if ( ! (g_rev.has_edge(e.dst, u)
+                        && e.wgt == g_rev.edge_weight(e.dst, u)) ) {
+                    verb::cerr() <<"reverse pb"
+                                 <<" u="<< lab[u]
+                                 <<" e.dst="<< lab[e.dst]
+                                 <<" wgts: "<< e.wgt
+                                 <<" " << g_rev.edge_weight(e.dst, u) <<"\n";
+                }
                 assert(g_rev.has_edge(e.dst, u)
                        && e.wgt == g_rev.edge_weight(e.dst, u));
             }
@@ -1141,10 +1157,10 @@ int main (int argc, char **argv) {
         
         ecc.clear();
         if (n_thread <= 1) {
-            ecc.all();
+            ecc.all(graph::not_vertex, true);
         } else {
             verb::cerr() << n_thread <<" eccentricity threads\n";
-            ecc.all_threaded(n_thread);
+            ecc.all_threaded(n_thread, graph::not_vertex, false, false);
         }
         verb::cerr() <<"last_lb_improve " << ecc.last_lb_improve <<std::endl;
 
@@ -1158,15 +1174,17 @@ int main (int argc, char **argv) {
         set_col("nall_nbfs", ecc.all_ecc_nsweep);
         set_col("nall_lb_P", ecc.P.size());
         set_col("nall_ub_C", ecc.C.size());
+        set_col("nall_lb_R_cert", ecc.rad_certif.size());
+        set_col("nall_ub_D_cert", ecc.diam_certif.size());
         set_col("nall_cert_lb", ecc.all_lb_certif.size());
         set_col("nall_cert_ub", ecc.all_ub_certif.size());
         set_col("nall_cert_nbfs",
                 ecc.nsweep + ecc.P.size() - ecc.all_ecc_nsweep);
 
-        // quite expansive with false, false :
-        int d_cert_final = ecc.optim_ub_certif_one_shot(false, true).size();
-        verb::cerr() <<"diam_cert_final " << d_cert_final << std::endl;
-        set_col("diam_cert_final", d_cert_final);
+        // quite expansive :
+        // int d_cert_final = ecc.optim_ub_certif_one_shot(false, true).size();
+        // verb::cerr() <<"diam_cert_final " << d_cert_final << std::endl;
+        // set_col("diam_cert_final", d_cert_final);
 
         // Centers :
         verb::cerr() <<"centers:";

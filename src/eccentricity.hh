@@ -3460,12 +3460,20 @@ public:
         verb::cerr() << "diam_certif_when_lb_tight todo: "
                      << todo.size() << "\n";
 
+        size_t sz = 0, ndone=0;
         for (V u : todo) {
             pruned_sweep_to_certifiers(u, trav, diam_lb);
+            sz += trav.nvis(); //verb::cerr() << u << ": set cov size: " << sz <<"\n";
             for (int i = trav.nvis() - 1; i >= 0; --i) {
                 V c = trav.visit(i);
                 certif_for[c].push_back(u);
             }
+            ++ndone;
+            if (verb::progress())
+                verb::cerr("eccentricity.diam_certif_when_lb_tight()", 2)
+                    << ndone << " / "<< todo.size() <<" todo "
+                    << "set cov inst. size: " << sz << "\n";
+
         }
         if (mprune > 0) { ++nsweep; mprune = 0; ++nprune_sweep; }
 
@@ -3561,6 +3569,8 @@ public:
     gdy_set_cov(const std::vector<std::vector<int>> &set,
                 const int n, // sets are subsets of 0..n-1
                 std::vector<int> to_be_covered = {-1}) {
+        verb::cerr() << "gdy_set_cov";
+        
         int m = set.size(); // number of sets
         std::vector<std::vector<int>> elt_of(n);
 
