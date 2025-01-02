@@ -268,6 +268,7 @@ int main (int argc, char **argv) {
     
     bool do_vector = del_arg("-test-vector"); //notcom
     bool symmetrize = del_arg("-symmetrize");
+    bool check_symmetric = del_arg("-check-symmetric");
     bool del_zero_edges = del_arg("-del-zero-edges"); //tocom
     bool do_reverse = del_arg("-reverse");
     bool do_scc = del_arg("-largest-scc");
@@ -283,6 +284,7 @@ int main (int argc, char **argv) {
     int n_big_graph = get_iarg("-n-big-graph", 0); //notcom
     bool do_skel = del_arg("-skel"); //tocom
     bool do_rad = del_arg("-rad") || del_arg("-radius");
+    bool do_rad_all = del_arg("-rad") || del_arg("-radius-all"); //notcom
     int sample_size = get_iarg("-sample-size", 20); //notcom
     bool do_diam = del_arg("-diam") || del_arg("-diameter");
     bool do_diam_all = del_arg("-diam-all"); //notcom
@@ -294,7 +296,7 @@ int main (int argc, char **argv) {
     bool very_low_cert = del_arg("-very-low-cert"); //very low mem usag for cert
     std::atomic<bool> low_cert(del_arg("-low-cert") || very_low_cert);
     std::string optim_certif = get_arg("-optim-certif");
-    std::string algo = get_arg("-algo");
+    std::string algo = get_arg("-algo"); //notcom
     int n_thread = get_iarg("-n-thread", 1); // not tested enough: std::thread::hardware_concurrency());
     int beta_hyp = get_iarg("-beta-hyp", INT_MAX);
     bool do_quad_antipode = del_arg("-quad-antipode");
@@ -683,6 +685,40 @@ int main (int argc, char **argv) {
         //for (int u : g_rev) for (int v : g_rev[u]) std::cerr<< u<<" "<< v<<"\n";
     }
 
+    // ------------------------- is symmetric ---------------------
+    {
+        g = g_rev.reverse(); // sorted
+        bool is_sym = true;
+        for (int u : g) {
+            for (auto e : g[u]) {
+                if ( ! ( g.has_edge(e.dst, u) 
+                         && e.wgt == g.edge_weight(e.dst, u) ) ) {
+                    verb::cerr() << "not symmetric\n";
+                    if ( ! g.has_edge(e.dst, u)) {
+                        verb::cerr() << "missing edge "
+                                     << lab[e.dst] <<" "<< lab[u]
+                                     <<" "<< e.wgt <<"\n";
+                    } else {
+                        verb::cerr() << "wrong weight "
+                                     << g.edge_weight(e.dst, u)
+                                     << " for edge "
+                                     << lab[e.dst] <<" "<< lab[u]
+                                     <<" "<< e.wgt <<"\n";
+                    }
+                    is_sym = false;
+                    goto stop;
+                }
+                    
+            }
+        }
+        verb::cerr() << "symmetric\n";
+    stop:
+        directed = ! is_sym;
+        if (check_symmetric && ! is_sym)
+            throw std::invalid_argument("graph is not symmetric");
+        verb::lap("is-symmetric");
+    }
+
 
     // ------------------------- print graph -----------------------
     if (print_graph) {
@@ -893,8 +929,35 @@ int main (int argc, char **argv) {
 
 
     // ----------------------- Radius heuristic -----------------
-
+    int64_t radius = 1;
     if (do_rad) {
+
+        if(g_scc_nb != 1) bye("The graph is not strongly connected.");
+        
+        ecc.clear();
+        verb::lap("rad");
+        int64_t r = ecc.radius(graph::not_vertex, true);
+        double t_r = verb::lap_time() * 1000;
+        set_col("rad_t", (int64_t)t_r);
+        
+        verb::cerr() << "rad : R=" << r << " D>=" << ecc.diam_lb
+                  <<" nbfs="<< ecc.rad_nsweep
+                  <<" ncertif="<< ecc.rad_certif.size()
+                  <<" time="<< t_r
+                  << std::endl;
+    
+        set_col("rad", r, 0);
+        radius = r;
+        set_col("rad_diam_lb", ecc.diam_lb);
+        set_col("rad_nbfs", ecc.rad_nsweep);
+        set_col("rad_cert", ecc.P.size());
+        set_col("rad_cert_opt", ecc.rad_certif.size());
+        set_col("rad_cert_nbfs", ecc.nsweep - ecc.rad_nsweep);
+        verb::lap("rad");
+    }
+
+    // ----------------------- Various radius heuristic -----------------
+    if (do_rad_all) {
 
         if(g_scc_nb != 1) bye("The graph is not strongly connected.");
         
@@ -919,7 +982,7 @@ int main (int argc, char **argv) {
         set_col("rad_smsw_cert_nbfs", ecc.nsweep - ecc.rad_nsweep);
 
         ecc.clear();
-        verb::lap("rad");
+        verb::lap("rad-all");
         r = ecc.radius(graph::not_vertex, true);
         t_r = verb::lap_time() * 1000;
         set_col("rad_t", (int64_t)t_r);
@@ -931,6 +994,7 @@ int main (int argc, char **argv) {
                   << std::endl;
     
         set_col("rad", r, 0);
+        radius = r;
         set_col("rad_diam_lb", ecc.diam_lb);
         set_col("rad_nbfs", ecc.rad_nsweep);
         set_col("rad_cert", ecc.P.size());
@@ -970,7 +1034,7 @@ int main (int argc, char **argv) {
         verb::cerr() << "spl_sz: "<< sample_size <<"\n";
         set_col("spl_sz", sample_size);
 
-        verb::lap("rad");
+        verb::lap("rad-all");
     }
     
     // --------------------- Various diameter heuristic ---------------
@@ -1007,6 +1071,7 @@ int main (int argc, char **argv) {
                   << std::endl;
 
         set_col("diam", d, 0);
+        set_col("D/R", d*1000/radius, 0);
         set_col("diam_nbfs", ecc.diam_nsweep);
         set_col("diam_cert", ecc.C.size());
         set_col("diam_cert_opt", ecc.diam_certif.size());
@@ -1360,6 +1425,7 @@ int main (int argc, char **argv) {
         set_col("rad", rad);
         int64_t diam = ecc.diam_lb;
         set_col("diam", diam);
+        set_col("D/R", diam*1000/rad);
 
         std::vector<int> disj = ecc.gdy_disjoint(ecc.Pcoballs, n);
         std::cerr << "all_ecc_disj: "<< disj.size() <<"\n";
@@ -2624,6 +2690,7 @@ int main (int argc, char **argv) {
     
     set_col("n", n, 1);
     set_col("m", m, 1);
+    set_col("m/n", m*1000/n, 1);
     set_col("dir", directed, 1);
     set_col("wgt", weighted, 1);
     set_col("nb_scc", g_scc_nb, 2);
